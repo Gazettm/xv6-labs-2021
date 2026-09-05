@@ -18,7 +18,7 @@ main(int argc, char *argv[])
         read(p2c[0], buf, 4);
         buf[4] = '\0';
         int id = getpid();
-        printf("%d: received %s",id,buf);
+        printf("%d: received %s\n",id,buf);
 
         write(c2p[1], "pong", 4);
 
@@ -34,7 +34,7 @@ main(int argc, char *argv[])
         read(c2p[0], buf, 4);
         buf[4] = '\0';
         int id = getpid();
-        printf("%d: received %s",id,buf);
+        printf("%d: received %s\n",id,buf);
         wait(0);
         exit(0);
     }
