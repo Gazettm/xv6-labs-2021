@@ -8,7 +8,7 @@ main()
   pid = fork();
   if (pid == 0) {
     char* argv[] = { "echo", "THIS", "IS", "ECHO", 0 };
-    exec("echo0", argv);
+    exec("echo", argv);
     printf("exec faild!\n");
     exit(1);
   }
