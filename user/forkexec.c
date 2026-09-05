@@ -1,5 +1,5 @@
-include "user/user.h"
-
+#include "user/user.h"
+#include "kernel/types.h"
 // forkexec.c: fork then exec
 int
 main()
@@ -8,6 +8,7 @@ main()
   pid = fork();
   if (pid == 0) {
     char* argv[] = { "echo", "THIS", "IS", "ECHO", 0 };
+    exec("echo0", argv);
     printf("exec faild!\n");
     exit(1);
   }
