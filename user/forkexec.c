@@ -15,7 +15,7 @@ main()
   else {
     printf("parent waitting\n");
     wait(&status);
-    printf("thi child exited with status %d\n", status);
+    printf("this child exited with status %d\n", status);
 
     exit(0);
   }
