@@ -1,5 +1,5 @@
-#include "user/user.h"
 #include "kernel/types.h"
+#include "user/user.h"
 // forkexec.c: fork then exec
 int
 main()
