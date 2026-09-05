@@ -196,7 +196,7 @@ UPROGS=\
 	$U/_wc\
 	$U/_zombie\
 	$U/_forkexec\
-
+	$U/_redirect\
 
 
 ifeq ($(LAB),$(filter $(LAB), pgtbl lock))
