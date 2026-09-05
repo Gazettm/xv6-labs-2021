@@ -195,9 +195,8 @@ UPROGS=\
 	$U/_grind\
 	$U/_wc\
 	$U/_zombie\
-	$U/_forkexec\
-	$U/_redirect\
 	$U/_sleep\
+	$U/_pingpong\
 
 ifeq ($(LAB),$(filter $(LAB), pgtbl lock))
 UPROGS += \
