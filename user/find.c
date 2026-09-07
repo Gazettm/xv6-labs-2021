@@ -64,7 +64,8 @@ void find(char *path, char *filename)
             {
                 printf("find: cannot stat %s\n", buf);
                 continue;
-            }else if(st.type == T_DIR){
+            }
+            if(st.type == T_DIR){
                 find(buf, filename);
             }
         }
