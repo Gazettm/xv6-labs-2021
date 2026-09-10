@@ -58,7 +58,6 @@
 // map kernel stacks beneath the trampoline,
 // each surrounded by invalid guard pages.
 #define KSTACK(p) (TRAMPOLINE - (p)*2*PGSIZE - 3*PGSIZE)
-#define USYSCALL ()
 // User memory layout.
 // Address zero first:
 //   text
