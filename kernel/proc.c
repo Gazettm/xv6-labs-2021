@@ -227,10 +227,10 @@ proc_freepagetable(pagetable_t pagetable, uint64 sz)
 {
   uvmunmap(pagetable, TRAMPOLINE, 1, 0);
   uvmunmap(pagetable, TRAPFRAME, 1, 0);
-  uvmfree(pagetable, sz);
 #ifdef LAB_PGTBL
   uvmunmap(pagetable, USYSCALL, 1, 0);
 #endif
+  uvmfree(pagetable, sz);
 }
 
 // a user program that calls exec("/init")
