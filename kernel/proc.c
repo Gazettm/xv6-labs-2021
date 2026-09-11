@@ -678,3 +678,48 @@ procdump(void)
     printf("\n");
   }
 }
+
+int
+pgaccess(uint64 uvmaddress, int size, uint64 bufaddr){
+  uint64 bitmap = 0;
+  
+  struct proc *p = myproc();
+  pte_t *pte;
+
+  int n = size / 64;
+  int m = size % 64;
+  int i, j, k;
+  for(i = 0; i < n; i++){
+    for(j = 0;j < 64;j++){
+      pte = walk(p -> pagetable, uvmaddress, 0);
+      if(pte == 0){
+        uvmaddress += PGSIZE;
+        continue;
+      }
+      if(*pte & PTE_A){
+        bitmap |= ((uint64)1 << j);
+      }
+    *pte = *pte & ~PTE_A;
+      uvmaddress += PGSIZE;
+    }
+    if(copyout(p->pagetable, bufaddr, (char *)&bitmap, sizeof(bitmap)) < 0)
+      return -1;
+    bufaddr += 8;
+  }
+  bitmap = 0;
+  for(k = 0;k < m; k++){
+    pte = walk(p -> pagetable, uvmaddress, 0);
+    if(pte == 0){
+      uvmaddress += PGSIZE;
+      continue;
+    }
+    if(*pte & PTE_A){
+      bitmap |= ((uint64)1 << k);
+    }
+    *pte = *pte & ~PTE_A;
+    uvmaddress += PGSIZE;
+  }
+  if(copyout(p->pagetable, bufaddr, (char *)&bitmap, sizeof(bitmap)) < 0)
+    return -1;
+  return 0;
+}

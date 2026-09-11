@@ -80,6 +80,7 @@ sys_sleep(void)
 int
 sys_pgaccess(void)
 {
+
   // lab pgtbl: your code here.
   return 0;
 }
@@ -106,4 +107,18 @@ sys_uptime(void)
   xticks = ticks;
   release(&tickslock);
   return xticks;
+}
+
+uint64
+sys_pgaccess(void)
+{
+  uint64 uvmaddr, bufaddr;
+  int size;
+  if(argaddr(0, &uvmaddr) < 0)
+    return -1;
+  if(argint(1, &size) < 0)
+    return -1;
+  if(argaddr(2, &bufaddr) < 0)
+    return -1;
+  return pgaccess(uvmaddr, size, bufaddr);
 }
