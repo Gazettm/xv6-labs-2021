@@ -1,0 +1,38 @@
+Q1: Which other xv6 system call(s) could be made faster using this shared page?
+Explain how.
+
+A: uptime() is the clearest candidate. It only reads the kernel's tick counter,
+which is a small read-only value and needs no privileged operation. If the
+kernel mapped that counter (or a copy of it) into a read-only page shared with
+user space, a program could read it directly instead of trapping into the
+kernel on every call. More generally, any system call that only returns a small,
+read-only piece of per-process or global kernel state (getpid, already done in
+this lab, or uptime) can be accelerated this way. Calls that must modify kernel
+state or check permissions still need a real trap.
+
+Q2: Explain the output of vmprint in terms of Fig 3-4 from the text. What does
+page 0 contain? What is in page 2? When running in user mode, could the process
+read/write the memory mapped by page 1? What does the third to last page
+contain?
+
+A: The dump shows the page table of the first process (init) right after it has
+finished exec(). In terms of Fig 3-4, the user address space starts at virtual
+address 0:
+
+  - page 0 (entry ".. .. ..0", PTE 0x1f = V|R|W|X|U) is the first page of the
+    program image. init is tiny, so its text (instructions) and data share this
+    one page, which is why the mapping is readable, writable, executable and
+    user-accessible at the same time.
+  - page 1 (entry ".. .. ..1", PTE 0x0f = V|R|W|X, without PTE_U) is the guard
+    page. Because PTE_U is clear, a process running in user mode CANNOT read or
+    write it; any access triggers a page fault. It exists to catch stack
+    overflow or out-of-bounds access instead of silently corrupting adjacent
+    memory.
+  - page 2 (entry ".. .. ..2", PTE 0x1f) is the user stack.
+  - Only two top-level entries are in use: entry 0 leads down to the user
+    text/data/guard page/stack, and entry 255 leads down to the pages the kernel
+    maps at the top of the user address space. Under entry 255, entries 509, 510
+    and 511 are USYSCALL, TRAPFRAME and TRAMPOLINE respectively.
+  - The third to last page (entry 509) contains the struct usyscall added for
+    this lab. Its only field is the process's pid, and it is mapped read-only
+    for user space so that ugetpid() can read the pid without a system call.
