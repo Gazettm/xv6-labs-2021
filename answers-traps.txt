@@ -1,0 +1,53 @@
+Q1: Which registers contain arguments to functions? For example, which register
+holds 13 in main's call to printf?
+
+A: Function arguments are passed in registers a0-a7 (a0 = first argument,
+a1 = second, and so on). In user/call.c, main calls
+printf("%d %d\n", f(8)+1, 13), so a0 holds the format string, a1 holds
+f(8)+1 (= 12), and a2 holds 13.
+
+Q2: Where is the call to function f in the assembly code for main? Where is the
+call to g? (Hint: the compiler may inline functions.)
+
+A: Neither call appears in the assembly. Since f and g are trivial, the compiler
+inlined them and then constant-folded the result: f(8) = g(8) = 8 + 3 = 11, so
+f(8) + 1 becomes the constant 12. The generated code simply loads that constant
+("li a1,12"); there is no jal/jalr targeting f or g anywhere in main.
+
+Q3: At what address is the function printf located?
+
+A: printf is at address 0x640.
+
+Q4: What value is in the register ra just after the jalr to printf in main?
+
+A: 0x40. The relevant instructions are:
+
+    38: auipc ra,0x0      # ra = PC + 0 = 0x38
+    3c: jalr 1544(ra)     # jump to 0x38 + 1544 = 0x640 (printf) and set
+                          # ra = address of the following instruction = 0x40
+
+So when printf eventually returns, execution resumes at 0x40.
+
+Q5: Run the following code ... what is the output? ... (little-endian questions)
+
+A: The output is "He110 World".
+
+  - %x prints 57616 in hexadecimal. 57616 = 0xe110, so after the leading "H" the
+    output is "e110".
+  - %s prints the bytes of i as a C string. i = 0x00646c72 is stored
+    little-endian as the byte sequence 72 6c 64 00, i.e. 'r' 'l' 'd' '\0', so it
+    prints "rld".
+
+If RISC-V were big-endian, i would have to be 0x726c6400 so that the bytes are
+again stored as 72 6c 64 00 and %s still prints "rld". 57616 would NOT need to
+change: %x prints the numeric value 0xe110, and a number's value is independent
+of byte order. Only the in-memory byte layout of i matters to %s.
+
+Q6: In the following code, what is going to be printed after 'y='? (note: the
+answer is not a specific value.) Why does this happen?
+
+A: A garbage (indeterminate) value rather than any fixed number. printf reads its
+third argument from register a2, but the call printf("x=%d y=%d", 3) supplies only
+two arguments, so a2 still contains whatever value happened to be left there by
+earlier code. The behavior is undefined; the value printed depends on what was in
+a2 at that moment.
