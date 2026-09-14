@@ -150,8 +150,7 @@ found:
   p->inalarmhandler = 0;
   p->alarminterval = 0;
   p->handler = 0;
-  p->saved = 0;
-
+  
   return p;
 }
 
