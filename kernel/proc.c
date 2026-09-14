@@ -119,7 +119,6 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
-
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
     freeproc(p);
@@ -135,11 +134,23 @@ found:
     return 0;
   }
 
+  // A copy for trapframe
+  if((p->saved = (struct trapframe *)kalloc()) == 0){
+    freeproc(p);
+    release(&p->lock);
+    return 0;
+  }
   // Set up new context to start executing at forkret,
   // which returns to user space.
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
+
+  p->alarmcountdown = 0;
+  p->inalarmhandler = 0;
+  p->alarminterval = 0;
+  p->handler = 0;
+  p->saved = 0;
 
   return p;
 }
@@ -155,6 +166,9 @@ freeproc(struct proc *p)
   p->trapframe = 0;
   if(p->pagetable)
     proc_freepagetable(p->pagetable, p->sz);
+  if(p->saved)
+    kfree((void*)p->saved);
+  p->saved = 0;
   p->pagetable = 0;
   p->sz = 0;
   p->pid = 0;
@@ -164,6 +178,10 @@ freeproc(struct proc *p)
   p->killed = 0;
   p->xstate = 0;
   p->state = UNUSED;
+  p->alarmcountdown = 0;
+  p->inalarmhandler = 0;
+  p->alarminterval = 0;
+  p->handler = 0;
 }
 
 // Create a user page table for a given process,
@@ -653,4 +671,15 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+int
+sigalarm(int n,uint64 handler)
+{ 
+  struct proc* p = myproc();
+  p -> handler = handler;
+  p -> alarminterval = n;
+
+  p -> alarmcountdown = n;
+  return 0;
 }

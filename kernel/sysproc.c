@@ -98,3 +98,26 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+uint64
+sys_sigreturn(void)
+{
+  struct proc* p = myproc();
+  memmove(p->trapframe, p->saved, sizeof(struct trapframe));
+  p->inalarmhandler = 0;
+  return 0;
+}
+
+uint64
+sys_sigalarm(void)
+{
+  int n;
+  uint64 fn;
+  if(argint(0, &n) < 0)
+    return -1;
+  if(argaddr(1, &fn) < 0)
+    return -1;
+  if(sigalarm(n,fn) < 0)
+    return -1;
+  return 0;
+}
