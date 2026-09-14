@@ -105,7 +105,7 @@ sys_sigreturn(void)
   struct proc* p = myproc();
   memmove(p->trapframe, p->saved, sizeof(struct trapframe));
   p->inalarmhandler = 0;
-  return 0;
+  return p -> trapframe -> a0;
 }
 
 uint64
