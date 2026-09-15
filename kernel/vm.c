@@ -310,8 +310,8 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
       panic("uvmcopy: page not present");
     pa = PTE2PA(*pte);
     flags = PTE_FLAGS(*pte);
-    flags = flags & ~PTE_W | PTE_COW;
-    *pte = *pte & ~PTE_W | PTE_COW;
+    flags = (flags & ~PTE_W) | PTE_COW;
+    *pte = (*pte & ~PTE_W) | PTE_COW;
     kaddref(pa);
     if(mappages(new, i, PGSIZE, pa, flags) != 0){
       goto err;
@@ -321,7 +321,7 @@ uvmcopy(pagetable_t old, pagetable_t new, uint64 sz)
 
  err:
   uvmunmap(new, 0, i / PGSIZE, 1);
-  kfree(pa);
+  kfree((void*)pa);
   return -1;
 /*
   pte_t *pte;
