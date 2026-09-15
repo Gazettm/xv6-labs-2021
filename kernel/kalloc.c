@@ -23,10 +23,17 @@ struct {
   struct run *freelist;
 } kmem;
 
+struct {
+  struct spinlock lock;
+  uint8 cowcount[(PHYSTOP - KERNBASE) / PGSIZE];
+} kcow;
+
 void
 kinit()
 {
   initlock(&kmem.lock, "kmem");
+  initlock(&kcow.lock, "kcow");
+  memset(&kcow.cowcount, 1, (PHYSTOP - KERNBASE) / PGSIZE);
   freerange(end, (void*)PHYSTOP);
 }
 
@@ -51,14 +58,23 @@ kfree(void *pa)
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
 
-  // Fill with junk to catch dangling refs.
-  memset(pa, 1, PGSIZE);
-
   r = (struct run*)pa;
 
   acquire(&kmem.lock);
-  r->next = kmem.freelist;
-  kmem.freelist = r;
+  acquire(&kcow.lock);
+  uint8 cowcnt = kcow.cowcount[((uint64)pa - KERNBASE) / PGSIZE];
+  if(cowcnt == 0){
+    panic("kfree: refcnt");
+  }
+  kcow.cowcount[((uint64)pa - KERNBASE) / PGSIZE] --;
+  cowcnt = kcow.cowcount[((uint64)pa - KERNBASE) / PGSIZE];
+  if(cowcnt == 0){
+    // Fill with junk to catch dangling refs.
+    memset(pa, 1, PGSIZE);
+    r->next = kmem.freelist;
+    kmem.freelist = r;
+  }
+  release(&kcow.lock);
   release(&kmem.lock);
 }
 
@@ -72,11 +88,32 @@ kalloc(void)
 
   acquire(&kmem.lock);
   r = kmem.freelist;
-  if(r)
+  if(r){
     kmem.freelist = r->next;
+    acquire(&kcow.lock);
+    uint64 pa = (uint64)r;
+    kcow.cowcount[(pa - KERNBASE) / PGSIZE] = 1;
+    release(&kcow.lock);
+  }
   release(&kmem.lock);
+
+
 
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
   return (void*)r;
+}
+
+void
+kaddref(uint64 pa)
+{
+  if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
+    panic("kaddref");
+
+  acquire(&kcow.lock);
+  if(kcow.cowcount[(pa - KERNBASE) / PGSIZE] == 0){
+    panic("kaddref:wrong cnt");
+  }
+  kcow.cowcount[(pa - KERNBASE) / PGSIZE]++;
+  release(&kcow.lock);
 }

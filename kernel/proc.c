@@ -654,3 +654,31 @@ procdump(void)
     printf("\n");
   }
 }
+
+int 
+cowfault(pagetable_t pagetable, uint64 va)
+{
+  pte_t *pte;
+  uint64 pa, newpa;
+  uint flags;
+
+  if(va >= MAXVA)
+    return -1;
+
+  if((pte = walk(pagetable, va, 0)) == 0)
+    return -1;
+
+  if((*pte & PTE_V) == 0 || (*pte & PTE_COW) == 0)
+    return -1;
+
+  pa = PTE2PA(*pte);
+  flags = (PTE_FLAGS(*pte) & ~PTE_COW) | PTE_W;
+
+  if((newpa = (uint64)kalloc()) == 0)
+    return -1;
+
+  memmove((char*)newpa, (char*)pa, PGSIZE);
+  *pte = PA2PTE(newpa) | flags;
+  kfree((void*)pa);
+  return 0;
+}
