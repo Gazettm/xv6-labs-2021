@@ -77,7 +77,7 @@ thread_schedule(void)
     next_thread->state = RUNNING;
     t = current_thread;
     current_thread = next_thread;
-    thread_switch(&t->context, &next_thread->context);
+    thread_switch((uint64)&t->context, (uint64)&next_thread->context);
     /* YOUR CODE HERE
      * Invoke thread_switch to switch from t to next_thread:
      * thread_switch(??, ??);
@@ -96,7 +96,7 @@ thread_create(void (*func)())
   }
   t->state = RUNNABLE;
   // YOUR CODE HERE
-  t->context.sp = t -> stack + STACK_SIZE;
+  t->context.sp = (uint64)t->stack + STACK_SIZE;
   t->context.ra = (uint64)func;
 }
 
