@@ -42,7 +42,7 @@ barrier()
   }
   else
   {
-    while (!((my_round == bstate.round)))
+    while ((my_round == bstate.round))
       pthread_cond_wait(&bstate.barrier_cond, &bstate.barrier_mutex);
   }
 
