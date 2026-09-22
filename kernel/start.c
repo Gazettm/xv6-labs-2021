@@ -38,6 +38,12 @@ start()
   w_mideleg(0xffff);
   w_sie(r_sie() | SIE_SEIE | SIE_STIE | SIE_SSIE);
 
+  // configure Physical Memory Protection to give supervisor mode
+  // access to all of physical memory (QEMU >= 7 enforces PMP; without it the
+  // first S-mode fetch after mret faults and the kernel hangs with no output).
+  asm volatile("csrw pmpaddr0, %0" : : "r" (0x3fffffffffffffull));
+  asm volatile("csrw pmpcfg0, %0" : : "r" (0xf));
+
   // ask for clock interrupts.
   timerinit();
 
