@@ -14,6 +14,7 @@ void freerange(void *pa_start, void *pa_end);
 extern char end[]; // first address after kernel.
                    // defined by kernel.ld.
 
+#define STEALCNT 64
 struct run {
   struct run *next;
 };
@@ -21,12 +22,17 @@ struct run {
 struct {
   struct spinlock lock;
   struct run *freelist;
-} kmem;
+} kmem[NCPU];
+
+struct run* ksteal(int cpu);
 
 void
 kinit()
 {
-  initlock(&kmem.lock, "kmem");
+  int i;
+  for(i = 0;i < NCPU;i++){
+    initlock(&kmem[i].lock, "kmem");
+  }
   freerange(end, (void*)PHYSTOP);
 }
 
@@ -47,7 +53,7 @@ void
 kfree(void *pa)
 {
   struct run *r;
-
+  int cpui;
   if(((uint64)pa % PGSIZE) != 0 || (char*)pa < end || (uint64)pa >= PHYSTOP)
     panic("kfree");
 
@@ -55,11 +61,13 @@ kfree(void *pa)
   memset(pa, 1, PGSIZE);
 
   r = (struct run*)pa;
-
-  acquire(&kmem.lock);
-  r->next = kmem.freelist;
-  kmem.freelist = r;
-  release(&kmem.lock);
+  push_off();
+  cpui = cpuid();
+  acquire(&kmem[cpui].lock);
+  r->next = kmem[cpui].freelist;
+  kmem[cpui].freelist = r;
+  release(&kmem[cpui].lock);
+  pop_off();
 }
 
 // Allocate one 4096-byte page of physical memory.
@@ -69,14 +77,55 @@ void *
 kalloc(void)
 {
   struct run *r;
+  struct run *tmp;
+  int cpui;
+  push_off();
+  cpui = cpuid();
+  acquire(&kmem[cpui].lock);
+  r = kmem[cpui].freelist;
+  if(!r){
+    release(&kmem[cpui].lock);
+    tmp = ksteal(cpui);
+    acquire(&kmem[cpui].lock);
 
-  acquire(&kmem.lock);
-  r = kmem.freelist;
+    while (tmp)
+    {
+      struct run *n = tmp->next;
+      tmp->next = kmem[cpui].freelist;
+      kmem[cpui].freelist = tmp;
+      tmp = n;
+    }
+
+    r = kmem[cpui].freelist;
+  }
   if(r)
-    kmem.freelist = r->next;
-  release(&kmem.lock);
-
+    kmem[cpui].freelist = r->next;
+  release(&kmem[cpui].lock);
+  pop_off();
   if(r)
     memset((char*)r, 5, PGSIZE); // fill with junk
   return (void*)r;
+}
+
+struct run* ksteal(int cpui){
+  struct run *r;
+  struct run *tmp = 0;
+  int cnt = 0;
+  for (int i = (cpui + 1) % NCPU; i != cpui ; i = (i + 1) % NCPU)
+  {
+    acquire(&kmem[i].lock);
+    //steal page form other
+    while(kmem[i].freelist && cnt < STEALCNT){
+      
+      r = kmem[i].freelist;
+      kmem[i].freelist = kmem[i].freelist -> next;
+      r->next = tmp;
+      tmp = r;
+      cnt++;
+    }
+    release(&kmem[i].lock);
+    if (tmp)
+      break;                 //success and quit
+  }
+  return tmp;
 }
