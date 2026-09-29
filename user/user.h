@@ -23,7 +23,8 @@ int getpid(void);
 char* sbrk(int);
 int sleep(int);
 int uptime(void);
-
+char *mmap(uint64, uint64, int, int, int, uint64);// return value is virtual address
+int munmap(char *, uint64);
 // ulib.c
 int stat(const char*, struct stat*);
 char* strcpy(char*, const char*);

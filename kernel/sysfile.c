@@ -15,6 +15,7 @@
 #include "sleeplock.h"
 #include "file.h"
 #include "fcntl.h"
+#include "memlayout.h"
 
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
@@ -481,6 +482,130 @@ sys_pipe(void)
     fileclose(rf);
     fileclose(wf);
     return -1;
+  }
+  return 0;
+}
+
+uint64
+sys_mmap(void)
+{
+  uint64 addr, length, offset;
+  int prot, flags, fd;
+  int i;
+  struct file* f;
+
+  struct proc *p = myproc();
+  uint64 vmaaddr = PGROUNDUP(p->sz);
+
+  // check parameter
+  if(argaddr(0, &addr) < 0)
+    return -1;
+  // xv6 parameter 0 must be zero.
+  if(addr != 0) return -1;
+
+  if(argaddr(1, &length) < 0){
+    return -1;
+  }
+  if(argint(2, &prot) < 0){
+    return -1;
+  }
+  if(argint(3, &flags) < 0){
+    return -1;
+  }
+
+  if(argint(4, &fd) < 0){
+    return -1;
+  }
+  // fd parameter must be vaild
+  if(fd < 0 || fd >= NOFILE || (p->ofile[fd]) == 0){
+    return -1;
+  }
+  if(argaddr(5, &offset) < 0){
+    return -1;
+  }
+  // update vmaaddr to bigest
+  for(i = 0; i < 16; i++){
+    if(p->vma[i].file && (p->vma[i].addr + p->vma[i].length > vmaaddr))
+      vmaaddr = p->vma[i].addr + p->vma[i].length;
+  }
+  if(vmaaddr + length > TRAPFRAME) return -1;
+  for(i = 0;i < 16;i++){
+    if(!p->vma[i].file)
+      break;
+  }
+  if(i == 16) return -1;
+  
+  f = p->ofile[fd];
+
+  //check
+  if((prot & PROT_READ) && !f->readable) return -1;
+  if((prot & PROT_WRITE) && (flags & MAP_SHARED) && !f->writable) return -1;
+
+  filedup(f);
+
+  p->vma[i].addr = vmaaddr;
+  p->vma[i].length = length;
+  p->vma[i].prot = prot;
+  p->vma[i].flags = flags;
+  p->vma[i].offset = offset;
+  p->vma[i].file = f;
+  return p->vma[i].addr;
+}
+
+uint64
+sys_munmap(void)
+{
+  uint64 uaddr, length;
+  int i;
+  uint64 pa, edge, origin;
+  struct inode *ip;
+
+  if(argaddr(0, &uaddr) < 0)
+    return -1;
+  if(argaddr(1, &length) < 0){
+    return -1;
+  }
+  
+  struct proc *p = myproc();
+  struct vma *v = 0;
+
+  for(i = 0;i < 16;i++){
+    if(p->vma[i].file && (p->vma[i].addr <= uaddr) && uaddr + length <= p->vma[i].addr + p->vma[i].length){
+      //ok
+      v = &(p->vma[i]);
+      break;
+    }
+  }
+  if(v == 0) return -1;
+
+  ip = v->file->ip;
+  origin = uaddr;
+  edge = uaddr + length;
+
+  while(uaddr < edge){
+    if( (pa = walkaddr(p->pagetable, uaddr) ) == 0){
+      uaddr += PGSIZE;
+      continue;
+    }
+    if((v->flags & MAP_SHARED) && (v->prot & PROT_WRITE)){
+      begin_op();
+      ilock(ip);
+      writei(ip, 0, pa, (PGROUNDDOWN(uaddr) - v->addr + v->offset), PGSIZE);
+      iunlock(ip);
+      end_op();
+    }
+    uvmunmap(p->pagetable, PGROUNDDOWN(uaddr), 1, 1);
+    uaddr += PGSIZE;
+  }
+  if(origin == v->addr && length == v->length){
+    fileclose(v->file);
+    v->file = 0;
+  }else if(origin == v->addr && length < v->length){
+    v->addr += length;
+    v->length -= length;
+    v->offset += length;
+  }else if(origin > v->addr && (origin + length) == (v->addr + v->length)){
+    v->length -= length;
   }
   return 0;
 }

@@ -5,7 +5,8 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
-
+#include "fcntl.h"
+#include "file.h"
 struct cpu cpus[NCPU];
 
 struct proc proc[NPROC];
@@ -140,6 +141,11 @@ found:
   memset(&p->context, 0, sizeof(p->context));
   p->context.ra = (uint64)forkret;
   p->context.sp = p->kstack + PGSIZE;
+
+  // set file zero
+  for(int i = 0;i < 16;i++){
+    p->vma[i].file = 0;
+  }
 
   return p;
 }
@@ -653,4 +659,54 @@ procdump(void)
     printf("%d %s %s", p->pid, state, p->name);
     printf("\n");
   }
+}
+
+int
+mmapfault(struct proc* p, uint64 vaddr, int scause)
+{
+  int i, perm;
+  struct vma* v = 0;
+  uint64 pa;
+  struct inode* ip;
+
+  for(i = 0;i < 16;i++){
+    if((p->vma[i].file != 0) && (p->vma[i].addr <= vaddr) && ((p->vma[i].addr + p->vma[i].length) > vaddr)){
+      v = &(p->vma[i]);
+      break;
+    }
+  }
+  if(v == 0) return -1;
+  if(scause == 13){
+    if(!(v->prot & PROT_READ)){
+      return -1;
+    }
+  }
+  if(scause == 15){
+    if(!(v->prot & PROT_WRITE)){
+      return -1;
+    }
+  }
+  
+  pa = (uint64)kalloc();
+  if(pa == 0)
+    return -1;
+  memset((void*)pa, 0, PGSIZE);
+
+  ip = v->file->ip;
+
+  begin_op();
+  ilock(ip);
+  readi(ip, 0, pa, (PGROUNDDOWN(vaddr) - v->addr + v->offset), PGSIZE);
+  iunlock(ip);
+  end_op();
+
+  perm = PTE_U;
+  if(v->prot & PROT_READ)  perm |= PTE_R;
+  if(v->prot & PROT_WRITE) perm |= PTE_W;
+  if(mappages(p->pagetable, PGROUNDDOWN(vaddr), PGSIZE, pa, perm) != 0){
+    kfree((void*)pa);
+    return -1;
+  }
+
+  return 0;
 }
