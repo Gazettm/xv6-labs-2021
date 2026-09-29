@@ -6,6 +6,8 @@
 #include "proc.h"
 #include "defs.h"
 #include "fcntl.h"
+#include "fs.h"
+#include "sleeplock.h"
 #include "file.h"
 struct cpu cpus[NCPU];
 
@@ -309,6 +311,14 @@ fork(void)
 
   safestrcpy(np->name, p->name, sizeof(p->name));
 
+  // copy VMA
+  for(i = 0; i < 16; i++)
+    if(p->vma[i].file){
+      np->vma[i] = p->vma[i];      // 复制登记表
+      filedup(np->vma[i].file);    // 每个 VMA 各自持一份文件引用
+    }
+
+
   pid = np->pid;
 
   release(&np->lock);
@@ -346,6 +356,7 @@ void
 exit(int status)
 {
   struct proc *p = myproc();
+  struct vma* v = 0;
 
   if(p == initproc)
     panic("init exiting");
@@ -356,6 +367,15 @@ exit(int status)
       struct file *f = p->ofile[fd];
       fileclose(f);
       p->ofile[fd] = 0;
+    }
+  }
+
+  for(int i = 0;i < 16;i++){
+    v = &(p->vma[i]);
+    if(p->vma[i].file){
+      vmaunmap (p->vma[i].addr, p->vma[i].addr + p->vma[i].length, v, p);
+      fileclose(v->file);
+      v->file = 0;
     }
   }
 
@@ -709,4 +729,27 @@ mmapfault(struct proc* p, uint64 vaddr, int scause)
   }
 
   return 0;
+}
+
+void
+vmaunmap(uint64 origin, uint64 edge, struct vma *v, struct proc* p)
+{
+  uint64 pa;
+  struct inode *ip = v->file->ip;
+  while(origin < edge){
+    if( (pa = walkaddr(p->pagetable, origin) ) == 0){
+      origin += PGSIZE;
+      continue;
+    }
+    if((v->flags & MAP_SHARED) && (v->prot & PROT_WRITE)){
+      begin_op();
+      ilock(ip);
+      writei(ip, 0, pa, (PGROUNDDOWN(origin) - v->addr + v->offset), PGSIZE);
+      iunlock(ip);
+      end_op();
+    }
+    uvmunmap(p->pagetable, PGROUNDDOWN(origin), 1, 1);
+    origin += PGSIZE;
+  }
+  
 }

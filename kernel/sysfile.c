@@ -557,8 +557,6 @@ sys_munmap(void)
 {
   uint64 uaddr, length;
   int i;
-  uint64 pa, edge, origin;
-  struct inode *ip;
 
   if(argaddr(0, &uaddr) < 0)
     return -1;
@@ -578,33 +576,16 @@ sys_munmap(void)
   }
   if(v == 0) return -1;
 
-  ip = v->file->ip;
-  origin = uaddr;
-  edge = uaddr + length;
-
-  while(uaddr < edge){
-    if( (pa = walkaddr(p->pagetable, uaddr) ) == 0){
-      uaddr += PGSIZE;
-      continue;
-    }
-    if((v->flags & MAP_SHARED) && (v->prot & PROT_WRITE)){
-      begin_op();
-      ilock(ip);
-      writei(ip, 0, pa, (PGROUNDDOWN(uaddr) - v->addr + v->offset), PGSIZE);
-      iunlock(ip);
-      end_op();
-    }
-    uvmunmap(p->pagetable, PGROUNDDOWN(uaddr), 1, 1);
-    uaddr += PGSIZE;
-  }
-  if(origin == v->addr && length == v->length){
+  vmaunmap (uaddr, uaddr + length, v, p);
+  
+  if(uaddr == v->addr && length == v->length){
     fileclose(v->file);
     v->file = 0;
-  }else if(origin == v->addr && length < v->length){
+  }else if(uaddr == v->addr && length < v->length){
     v->addr += length;
     v->length -= length;
     v->offset += length;
-  }else if(origin > v->addr && (origin + length) == (v->addr + v->length)){
+  }else if(uaddr > v->addr && (uaddr + length) == (v->addr + v->length)){
     v->length -= length;
   }
   return 0;
